@@ -13,6 +13,8 @@ from .wallgap import *
 from .sidewalk import *
 from .putnext import *
 from .maze import *
+from .custom_maze import *
+from .multiroom_3d import *
 from .collecthealth import *
 from .simtorealgoto import *
 from .simtorealpush import *
