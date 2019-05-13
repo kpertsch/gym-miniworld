@@ -151,18 +151,18 @@ class ImageFrame(Entity):
     Note: the position is in the middle of the frame, on the wall
     """
 
-    def __init__(self, pos, dir, tex_name, width, depth=0.05):
+    def __init__(self, pos, dir, tex_name, width, depth=0.05, load_texture=True):
         super().__init__()
 
         self.pos = pos
         self.dir = dir
-
-        # Load the image to be displayed
-        self.tex = Texture.get(tex_name)
-
         self.width = width
         self.depth = depth
-        self.height = (float(self.tex.height) / self.tex.width) * self.width
+
+        # Load the image to be displayed
+        if load_texture:
+            self.tex = Texture.get(tex_name)
+            self.height = (float(self.tex.height) / self.tex.width) * self.width
 
     def is_static(self):
         return True
@@ -239,6 +239,19 @@ class ImageFrame(Entity):
         glEnd()
 
         glPopMatrix()
+
+
+class MarkerFrame(ImageFrame):
+    """
+    Frame to display a geometry marker on a wall
+    Note: the position is in the middle of the frame, on the wall
+    """
+
+    def __init__(self, pos, dir, marker_num, width, depth=0.05):
+        super().__init__(pos, dir, marker_num, width, depth, load_texture=False)
+        self.tex = GeomTexture.get(marker_num)
+        self.height = (float(self.tex.height) / self.tex.width) * self.width
+
 
 class TextFrame(Entity):
     """

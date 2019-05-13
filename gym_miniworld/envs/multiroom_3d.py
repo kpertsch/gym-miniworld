@@ -2,7 +2,7 @@ import numpy as np
 import math
 from gym import spaces
 from ..miniworld import MiniWorldEnv, Room
-from ..entity import Box, ImageFrame
+from ..entity import Box, MarkerFrame
 from ..params import DEFAULT_PARAMS
 from ..random import RandGen
 
@@ -26,7 +26,7 @@ class Multiroom3d(MiniWorldEnv):
     def __init__(self, **kwargs):
         # Parameters for larger movement steps, fast stepping
         params = DEFAULT_PARAMS.no_random()
-        params.set('forward_step', 0.7)
+        params.set('forward_step', 2.0)
         params.set('turn_step', 45)
 
         self.room_size = _mj2mw(1/3)
@@ -87,6 +87,7 @@ class Multiroom3d(MiniWorldEnv):
             door_center = (room_1.max_x - room_1.min_x) / 2 + room_1.min_x
             self.connect_rooms(room_1, room_2, min_x=door_center - self.door_size/2, max_x=door_center + self.door_size/2)
 
+        # create doors between rooms
         connect_horizontal(self.rooms[0], self.rooms[3])
         connect_horizontal(self.rooms[3], self.rooms[6])
         connect_horizontal(self.rooms[1], self.rooms[4])
@@ -97,8 +98,66 @@ class Multiroom3d(MiniWorldEnv):
         connect_vertical(self.rooms[3], self.rooms[4])
         connect_vertical(self.rooms[7], self.rooms[8])
 
-        self.box = self.place_entity(Box(color='red'))
+        # add markers to the rooms
+        self.markers = []
+        def add_marker(room, marker_num, side):
+            EPS = self.room_size * 0.02
+            if side == 'left':
+                pos1 = (room.min_x + EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z - self.room_size / 4)
+                pos2 = (room.min_x + EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z + self.room_size / 4)
+                dir = 0
+            elif side == 'right':
+                pos1 = (room.max_x - EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z - self.room_size / 4)
+                pos2 = (room.max_x - EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z + self.room_size / 4)
+                dir = np.pi
+            elif side == 'top':
+                pos1 = ((room.max_x - room.min_x) / 2 + room.min_x - self.room_size / 4, 1.5, room.min_z + EPS)
+                pos2 = ((room.max_x - room.min_x) / 2 + room.min_x + self.room_size / 4, 1.5, room.min_z + EPS)
+                dir = 3 * np.pi / 2
+            elif side == 'bottom':
+                pos1 = ((room.max_x - room.min_x) / 2 + room.min_x - self.room_size / 4, 1.5, room.max_z - EPS)
+                pos2 = ((room.max_x - room.min_x) / 2 + room.min_x + self.room_size / 4, 1.5, room.max_z - EPS)
+                dir = np.pi / 2
+            else:
+                raise ValueError("Marker placement '{}' not supported!".format(side))
+            self.markers.append(self.place_entity(MarkerFrame(pos=(0, 0, 0), dir=0,
+                                                              marker_num=marker_num, width=1.5),
+                                                  pos=pos1, dir=dir))
+            self.markers.append(self.place_entity(MarkerFrame(pos=(0, 0, 0), dir=0,
+                                                              marker_num=marker_num, width=1.5),
+                                                  pos=pos2, dir=dir))
 
+        add_marker(self.rooms[0], 0, 'left')
+        add_marker(self.rooms[0], 0, 'top')
+        add_marker(self.rooms[0], 0, 'bottom')
+
+        add_marker(self.rooms[1], 1, 'top')
+        add_marker(self.rooms[1], 1, 'left')
+
+        add_marker(self.rooms[2], 2, 'left')
+        add_marker(self.rooms[2], 2, 'right')
+        add_marker(self.rooms[2], 2, 'bottom')
+
+        add_marker(self.rooms[3], 3, 'top')
+
+        add_marker(self.rooms[4], 4, 'bottom')
+
+        add_marker(self.rooms[5], 5, 'left')
+        add_marker(self.rooms[5], 5, 'top')
+        add_marker(self.rooms[5], 5, 'bottom')
+
+        add_marker(self.rooms[6], 6, 'right')
+        add_marker(self.rooms[6], 6, 'top')
+        add_marker(self.rooms[6], 6, 'bottom')
+
+        add_marker(self.rooms[7], 7, 'right')
+        add_marker(self.rooms[7], 7, 'top')
+
+        add_marker(self.rooms[8], 8, 'right')
+        add_marker(self.rooms[8], 8, 'bottom')
+
+        # add start and goal
+        self.box = self.place_entity(Box(color='red'))
         self.place_agent()
 
     def step(self, action):

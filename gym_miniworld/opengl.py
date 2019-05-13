@@ -111,6 +111,32 @@ class Texture:
     def bind(self):
         glBindTexture(self.tex.target, self.tex.id)
 
+
+class GeomTexture(Texture):
+    """
+    Loads Texture from Geometry folder.
+    """
+
+    @classmethod
+    def get(self, geom_number, rng=None):
+        """
+        Load a texture by name (or used a cached version)
+        Also performs domain randomization if multiple versions are available.
+        """
+
+        paths = self.tex_paths.get('geom', [])
+
+        # Get an inventory of the existing texture files
+        if len(paths) == 0:
+            path = get_file_path('textures', 'geoms/geom_%d' % (geom_number), 'png')
+            paths.append(path)
+
+        if path not in self.tex_cache:
+            self.tex_cache[path] = Texture(Texture.load(path), 'geom')
+
+        return self.tex_cache[path]
+
+
 class FrameBuffer:
     """
     Manage frame buffers for rendering
