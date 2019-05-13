@@ -38,8 +38,9 @@ class Multiroom3d(MiniWorldEnv):
         self.action_space = spaces.Discrete(self.actions.move_forward+1)
 
     def _gen_world(self):
-        textures = ["brick_wall"] #, "cinder_blocks", "drywall", "marble", "metal_grill",
-                    #"wood", "wood_planks"]
+        textures = ["lg_style_01_wall_{}".format(s) for s in ['green_bright', 'blue', 'cerise', 'green', 'purple',
+                                                              'red', 'yellow']] + \
+                   ["lg_style_03_wall_{}".format(s) for s in ['cyan', 'orange']]
         maze_rand_gen = RandGen(42)  # fix maze layout
 
         def add_room(xmin, xmax, zmin, zmax):
@@ -49,7 +50,7 @@ class Multiroom3d(MiniWorldEnv):
                 max_x=xmax,
                 min_z=zmin,
                 max_z=zmax,
-                wall_tex=maze_rand_gen.subset(textures, 1)[0],
+                wall_tex=textures[len(self.rooms) % len(textures)],
                 floor_tex='asphalt',
                 no_ceiling=True,
             )
@@ -127,34 +128,34 @@ class Multiroom3d(MiniWorldEnv):
                                                               marker_num=marker_num, width=1.5),
                                                   pos=pos2, dir=dir))
 
-        add_marker(self.rooms[0], 0, 'left')
-        add_marker(self.rooms[0], 0, 'top')
-        add_marker(self.rooms[0], 0, 'bottom')
-
-        add_marker(self.rooms[1], 1, 'top')
-        add_marker(self.rooms[1], 1, 'left')
-
-        add_marker(self.rooms[2], 2, 'left')
-        add_marker(self.rooms[2], 2, 'right')
-        add_marker(self.rooms[2], 2, 'bottom')
-
-        add_marker(self.rooms[3], 3, 'top')
-
-        add_marker(self.rooms[4], 4, 'bottom')
-
-        add_marker(self.rooms[5], 5, 'left')
-        add_marker(self.rooms[5], 5, 'top')
-        add_marker(self.rooms[5], 5, 'bottom')
-
-        add_marker(self.rooms[6], 6, 'right')
-        add_marker(self.rooms[6], 6, 'top')
-        add_marker(self.rooms[6], 6, 'bottom')
-
-        add_marker(self.rooms[7], 7, 'right')
-        add_marker(self.rooms[7], 7, 'top')
-
-        add_marker(self.rooms[8], 8, 'right')
-        add_marker(self.rooms[8], 8, 'bottom')
+        # add_marker(self.rooms[0], 0, 'left')
+        # add_marker(self.rooms[0], 0, 'top')
+        # add_marker(self.rooms[0], 0, 'bottom')
+        #
+        # add_marker(self.rooms[1], 1, 'top')
+        # add_marker(self.rooms[1], 1, 'left')
+        #
+        # add_marker(self.rooms[2], 2, 'left')
+        # add_marker(self.rooms[2], 2, 'right')
+        # add_marker(self.rooms[2], 2, 'bottom')
+        #
+        # add_marker(self.rooms[3], 3, 'top')
+        #
+        # add_marker(self.rooms[4], 4, 'bottom')
+        #
+        # add_marker(self.rooms[5], 5, 'left')
+        # add_marker(self.rooms[5], 5, 'top')
+        # add_marker(self.rooms[5], 5, 'bottom')
+        #
+        # add_marker(self.rooms[6], 6, 'right')
+        # add_marker(self.rooms[6], 6, 'top')
+        # add_marker(self.rooms[6], 6, 'bottom')
+        #
+        # add_marker(self.rooms[7], 7, 'right')
+        # add_marker(self.rooms[7], 7, 'top')
+        #
+        # add_marker(self.rooms[8], 8, 'right')
+        # add_marker(self.rooms[8], 8, 'bottom')
 
         # add start and goal
         self.box = self.place_entity(Box(color='red'))
