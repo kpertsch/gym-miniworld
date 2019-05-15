@@ -703,7 +703,7 @@ class MiniWorldEnv(gym.Env):
 
         self.step_count += 1
 
-        if action.size == 1:
+        if isinstance(action, MiniWorldEnv.Actions):
             self._step_discrete_action(action)
         else:
             self._step_continuous_action(action)
