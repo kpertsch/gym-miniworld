@@ -8,6 +8,7 @@ from ..random import RandGen
 
 
 SCALE = 27      # scale from mujoco layout to miniworld environment
+HEADING_SMOOTHING_CONSTANT = 0.3
 
 
 class Multiroom3d(MiniWorldEnv):
@@ -157,6 +158,28 @@ class Multiroom3d(MiniWorldEnv):
                                           pos=np.array((reset_state.goal[0], 0.1, reset_state.goal[1])))
             self.place_agent(pos=np.array((reset_state.start_pos[0], 0.1, reset_state.start_pos[1])),
                              dir=reset_state.start_angle)
+
+    def _step_continuous_action(self, action):
+        """d_angle in deg."""
+        assert action.size == 2  # can currently only support [dx, dz] action
+        dx, dz = action
+        current_heading = self.agent.dir * 180 / np.pi
+
+        heading = np.arctan2(-dz, dx) * 180 / np.pi
+        distance = np.sqrt(dx**2 + dz**2)
+
+        def get_angle_dist(a1, a2):
+            mod = lambda a, n: a - np.floor(a/n) * n
+            return mod((a1 - a2 + 180), 360) - 180
+
+        target_heading = HEADING_SMOOTHING_CONSTANT * heading + (1 - HEADING_SMOOTHING_CONSTANT) * current_heading
+        d_heading = get_angle_dist(heading, current_heading)
+
+        print("Current: {}, Heading: {}, Diff: {}".format(current_heading, heading, d_heading))
+
+        self.turn_agent(-current_heading + heading)
+        self.move_agent(distance, fwd_drift=0)
+        self.turn_agent(current_heading - heading + d_heading * HEADING_SMOOTHING_CONSTANT)
 
     def step(self, action):
         obs, reward, done, agent_pos = super().step(action)

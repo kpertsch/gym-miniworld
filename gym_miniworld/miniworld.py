@@ -694,11 +694,7 @@ class MiniWorldEnv(gym.Env):
                 self.agent.carrying = None
 
     def _step_continuous_action(self, action):
-        """Angle in deg."""
-        assert action.size == 2     # can currently only support [angle, distance] action
-        angle, distance = action
-        self.turn_agent(angle)
-        self.move_agent(distance, fwd_drift=0)
+        raise NotImplementedError   # if used this needs to be implemented in inheriting class
 
     def step(self, action):
         """
