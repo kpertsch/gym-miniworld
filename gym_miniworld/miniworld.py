@@ -530,7 +530,7 @@ class MiniWorldEnv(gym.Env):
         self.rand = RandGen(seed)
         return [seed]
 
-    def reset(self):
+    def reset(self, reset_state=None):
         """
         Reset the simulation at the start of a new episode
         This also randomizes many environment parameters (domain randomization)
@@ -553,7 +553,10 @@ class MiniWorldEnv(gym.Env):
         self.wall_segs = []
 
         # Generate the world
-        self._gen_world()
+        try:
+            self._gen_world(reset_state)    # new interface only supported in some envs
+        except ValueError:
+            self._gen_world()
 
         # Check if domain randomization is enabled or not
         rand = self.rand if self.domain_rand else None
@@ -656,13 +659,7 @@ class MiniWorldEnv(gym.Env):
 
         return True
 
-    def step(self, action):
-        """
-        Perform one action and update the simulation
-        """
-
-        self.step_count += 1
-
+    def _step_discrete_action(self, action):
         rand = self.rand if self.domain_rand else None
         fwd_step = self.params.sample(rand, 'forward_step')
         fwd_drift = self.params.sample(rand, 'forward_drift')
@@ -696,6 +693,25 @@ class MiniWorldEnv(gym.Env):
                 self.agent.carrying.pos[1] = 0
                 self.agent.carrying = None
 
+    def _step_continuous_action(self, action):
+        """Angle in deg."""
+        assert action.size == 2     # can currently only support [angle, distance] action
+        angle, distance = action
+        self.turn_agent(angle)
+        self.move_agent(distance, fwd_drift=0)
+
+    def step(self, action):
+        """
+        Perform one action and update the simulation
+        """
+
+        self.step_count += 1
+
+        if action.size == 1:
+            self._step_discrete_action(action)
+        else:
+            self._step_continuous_action(action)
+
         # If we are carrying an object, update its position as we move
         if self.agent.carrying:
             ent_pos = self._get_carry_pos(self.agent.pos, self.agent.carrying)
@@ -714,7 +730,7 @@ class MiniWorldEnv(gym.Env):
         reward = 0
         done = False
 
-        return obs, reward, done, {}
+        return obs, reward, done, np.concatenate((self.agent.pos, np.array([self.agent.dir])))
 
     def add_rect_room(
         self,
@@ -906,6 +922,7 @@ class MiniWorldEnv(gym.Env):
     def place_agent(
         self,
         room=None,
+        pos=None,
         dir=None,
         min_x=None,
         max_x=None,
@@ -920,6 +937,7 @@ class MiniWorldEnv(gym.Env):
         return self.place_entity(
             self.agent,
             room=room,
+            pos=pos,
             dir=dir,
             min_x=min_x,
             max_x=max_x,
@@ -994,7 +1012,7 @@ class MiniWorldEnv(gym.Env):
         self.room_probs = np.array([r.area for r in self.rooms], dtype=float)
         self.room_probs /= np.sum(self.room_probs)
 
-    def _gen_world(self):
+    def _gen_world(self, reset_state=None):
         """
         Generate the world. Derived classes must implement this method.
         """
@@ -1227,7 +1245,7 @@ class MiniWorldEnv(gym.Env):
 
         # Render the human-view image
         img = self.render_obs(self.vis_fb)
-        #img = self.render_top_view(self.vis_fb)
+        # img = self.render_top_view(self.vis_fb)
         img_width = img.shape[1]
         img_height = img.shape[0]
 

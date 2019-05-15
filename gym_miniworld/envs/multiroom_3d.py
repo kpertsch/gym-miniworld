@@ -10,14 +10,6 @@ from ..random import RandGen
 SCALE = 27      # scale from mujoco layout to miniworld environment
 
 
-def _mj2mw(val):
-    return val * SCALE
-
-
-def _mw2mj(val):
-    return val / SCALE
-
-
 class Multiroom3d(MiniWorldEnv):
     """
     Multiroom environment in which the agent has to reach a red box
@@ -29,19 +21,18 @@ class Multiroom3d(MiniWorldEnv):
         params.set('forward_step', 2.0)
         params.set('turn_step', 45)
 
-        self.room_size = _mj2mw(1/3)
-        self.door_size = _mj2mw(1.5 * 0.0667)
-        self.wall_size = _mj2mw(0.005)
+        self.room_size = self.mj2mw(1/3)
+        self.door_size = self.mj2mw(1.5 * 0.0667)
+        self.wall_size = self.mj2mw(0.005)
         super().__init__(**kwargs)
 
         # Allow only the movement actions
         self.action_space = spaces.Discrete(self.actions.move_forward+1)
 
-    def _gen_world(self):
+    def _gen_world(self, reset_state=None):
         textures = ["lg_style_01_wall_{}".format(s) for s in ['green_bright', 'blue', 'cerise', 'green', 'purple',
                                                               'red', 'yellow']] + \
                    ["lg_style_03_wall_{}".format(s) for s in ['cyan', 'orange']]
-        maze_rand_gen = RandGen(42)  # fix maze layout
 
         def add_room(xmin, xmax, zmin, zmax):
             # adds rooms to member self.rooms automatically
@@ -158,14 +149,40 @@ class Multiroom3d(MiniWorldEnv):
         # add_marker(self.rooms[8], 8, 'bottom')
 
         # add start and goal
-        self.box = self.place_entity(Box(color='red'))
-        self.place_agent()
+        if reset_state is None:
+            self.goal = self.place_entity(Box(color='red'))
+            self.place_agent()
+        else:
+            self.goal = self.place_entity(Box(color='red'),
+                                          pos=np.array((reset_state.goal[0], 0.1, reset_state.goal[1])))
+            self.place_agent(pos=np.array((reset_state.start_pos[0], 0.1, reset_state.start_pos[1])),
+                             dir=reset_state.start_angle)
 
     def step(self, action):
-        obs, reward, done, info = super().step(action)
+        obs, reward, done, agent_pos = super().step(action)
 
-        if self.near(self.box):
+        if self.near(self.goal):
             reward += self._reward()
             done = True
 
-        return obs, reward, done, info
+        return obs, reward, done, np.delete(agent_pos, [1])
+
+    @staticmethod
+    def mj2mw(val):
+        scaled = val * SCALE
+        if isinstance(val, float):
+            return scaled
+        elif val.size == 2 or len(val.shape) == 2:
+            return np.array([scaled[0], -scaled[1]])
+        else:
+            raise ValueError("Scale function does not support inputs of shape {}".format(val.shape))
+
+    @staticmethod
+    def mw2mj(val):
+        scaled = val / SCALE
+        if isinstance(val, float):
+            return scaled
+        elif val.size == 2 or len(val.shape) == 2:
+            return np.array([scaled[0], -scaled[1]])
+        else:
+            raise ValueError("Scale function does not support inputs of shape {}".format(val.shape))
