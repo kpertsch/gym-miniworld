@@ -8,7 +8,7 @@ from ..random import RandGen
 
 
 SCALE = 27      # scale from mujoco layout to miniworld environment
-HEADING_SMOOTHING_CONSTANT = 0.3
+HEADING_SMOOTHING_CONSTANT = 0.2 	# CONSTANT * new_heading + (1 - CONSTANT) * old_heading
 
 
 class Multiroom3d(MiniWorldEnv):
