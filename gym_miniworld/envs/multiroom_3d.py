@@ -8,7 +8,8 @@ from ..random import RandGen
 
 
 SCALE = 27      # scale from mujoco layout to miniworld environment
-HEADING_SMOOTHING_CONSTANT = 0.3
+HEADING_SMOOTHING_CONSTANT = 0.2 / 4
+N_ROOMS = 36
 
 
 class Multiroom3d(MiniWorldEnv):
@@ -25,71 +26,18 @@ class Multiroom3d(MiniWorldEnv):
         self.room_size = self.mj2mw(1/3)
         self.door_size = self.mj2mw(1.5 * 0.0667)
         self.wall_size = self.mj2mw(0.005)
+        # self.n_rooms = kwargs.pop('n_rooms')
+        # self.rooms_per_side = int(math.sqrt(self.n_rooms))
+        # self.doors = kwargs.pop('doors')
+        # print("##### N_ROOMS: %i ########".format(self.n_rooms))
         super().__init__(**kwargs)
 
         # Allow only the movement actions
         self.action_space = spaces.Discrete(self.actions.move_forward+1)
 
     def _gen_world(self, reset_state=None):
-        textures = ["lg_style_01_wall_{}".format(s) for s in ['green_bright', 'blue', 'cerise', 'green', 'purple',
-                                                              'red', 'yellow']] + \
-                   ["lg_style_03_wall_{}".format(s) for s in ['cyan', 'orange']]
-
-        def add_room(xmin, xmax, zmin, zmax):
-            # adds rooms to member self.rooms automatically
-            self.add_rect_room(
-                min_x=xmin,
-                max_x=xmax,
-                min_z=zmin,
-                max_z=zmax,
-                wall_tex=textures[len(self.rooms) % len(textures)],
-                floor_tex='asphalt',
-                no_ceiling=True,
-            )
-
-        # add rooms
-        add_room(-(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size),
-                 -(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size))
-        add_room(-(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size),
-                 -(0.5 * self.room_size), +(0.5 * self.room_size))
-        add_room(-(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size),
-                 +(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size))
-
-        add_room(-(0.5 * self.room_size), +(0.5 * self.room_size),
-                 -(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size))
-        add_room(-(0.5 * self.room_size), +(0.5 * self.room_size),
-                 -(0.5 * self.room_size), +(0.5 * self.room_size))
-        add_room(-(0.5 * self.room_size), +(0.5 * self.room_size),
-                 +(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size))
-
-        add_room(+(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size),
-                 -(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size))
-        add_room(+(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size),
-                 -(0.5 * self.room_size), +(0.5 * self.room_size))
-        add_room(+(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size),
-                 +(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size))
-
-        # prune some walls to connect rooms
-        def connect_horizontal(room_1, room_2):
-            assert room_1.min_z == room_2.min_z and room_1.max_z == room_2.max_z  # can only connect neighboring rooms
-            door_center = (room_1.max_z - room_1.min_z) / 2 + room_1.min_z
-            self.connect_rooms(room_1, room_2, min_z=door_center - self.door_size / 2, max_z=door_center + self.door_size / 2)
-
-        def connect_vertical(room_1, room_2):
-            assert room_1.min_x == room_2.min_x and room_1.max_x == room_2.max_x    # can only connect neighboring rooms
-            door_center = (room_1.max_x - room_1.min_x) / 2 + room_1.min_x
-            self.connect_rooms(room_1, room_2, min_x=door_center - self.door_size/2, max_x=door_center + self.door_size/2)
-
-        # create doors between rooms
-        connect_horizontal(self.rooms[0], self.rooms[3])
-        connect_horizontal(self.rooms[3], self.rooms[6])
-        connect_horizontal(self.rooms[1], self.rooms[4])
-        connect_horizontal(self.rooms[4], self.rooms[7])
-        connect_horizontal(self.rooms[5], self.rooms[8])
-
-        connect_vertical(self.rooms[1], self.rooms[2])
-        connect_vertical(self.rooms[3], self.rooms[4])
-        connect_vertical(self.rooms[7], self.rooms[8])
+        self.add_rooms()
+        self.add_doors()
 
         # add markers to the rooms
         self.markers = []
@@ -209,3 +157,196 @@ class Multiroom3d(MiniWorldEnv):
             return np.array([scaled[0], -scaled[1]])
         else:
             raise ValueError("Scale function does not support inputs of shape {}".format(val.shape))
+
+    def add_rooms(self):
+        textures = ["lg_style_01_wall_{}".format(s) for s in ['green_bright', 'blue', 'cerise', 'green', 'purple',
+                                                              'red', 'yellow']] + \
+                   ["lg_style_03_wall_{}".format(s) for s in ['cyan', 'orange']]
+
+        def add_room(xmin, xmax, zmin, zmax):
+            # adds rooms to member self.rooms automatically
+            self.add_rect_room(
+                min_x=xmin,
+                max_x=xmax,
+                min_z=zmin,
+                max_z=zmax,
+                wall_tex=textures[len(self.rooms) % len(textures)],
+                floor_tex='asphalt',
+                no_ceiling=True,
+            )
+
+        # add rooms
+        if N_ROOMS == 9:
+            add_room(-(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size),
+                     -(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size))
+            add_room(-(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size),
+                     -(0.5 * self.room_size), +(0.5 * self.room_size))
+            add_room(-(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size),
+                     +(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size))
+
+            add_room(-(0.5 * self.room_size), +(0.5 * self.room_size),
+                     -(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size))
+            add_room(-(0.5 * self.room_size), +(0.5 * self.room_size),
+                     -(0.5 * self.room_size), +(0.5 * self.room_size))
+            add_room(-(0.5 * self.room_size), +(0.5 * self.room_size),
+                     +(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size))
+
+            add_room(+(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size),
+                     -(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size))
+            add_room(+(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size),
+                     -(0.5 * self.room_size), +(0.5 * self.room_size))
+            add_room(+(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size),
+                     +(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size))
+
+        else:
+            add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
+                     -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
+            add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
+                     -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
+            add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
+                     -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
+            add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
+                     (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
+            add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
+                     (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
+            add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
+                     (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
+
+            add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
+                     -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
+            add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
+                     -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
+            add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
+                     -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
+            add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
+                     (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
+            add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
+                     (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
+            add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
+                     (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
+
+            add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
+                     -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
+            add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
+                     -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
+            add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
+                     -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
+            add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
+                     (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
+            add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
+                     (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
+            add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
+                     (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
+
+            add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
+                     -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
+            add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
+                     -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
+            add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
+                     -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
+            add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
+                     (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
+            add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
+                     (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
+            add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
+                     (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
+
+            add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
+                     -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
+            add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
+                     -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
+            add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
+                     -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
+            add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
+                     (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
+            add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
+                     (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
+            add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
+                     (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
+
+            add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
+                     -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
+            add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
+                     -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
+            add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
+                     -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
+            add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
+                     (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
+            add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
+                     (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
+            add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
+                     (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
+
+    def add_doors(self):
+        # prune some walls to connect rooms
+        def connect_horizontal(room_1, room_2):
+            assert room_1.min_z == room_2.min_z and room_1.max_z == room_2.max_z  # can only connect neighboring rooms
+            door_center = (room_1.max_z - room_1.min_z) / 2 + room_1.min_z
+            self.connect_rooms(room_1, room_2, min_z=door_center - self.door_size / 2,
+                               max_z=door_center + self.door_size / 2)
+
+        def connect_vertical(room_1, room_2):
+            assert room_1.min_x == room_2.min_x and room_1.max_x == room_2.max_x  # can only connect neighboring rooms
+            door_center = (room_1.max_x - room_1.min_x) / 2 + room_1.min_x
+            self.connect_rooms(room_1, room_2, min_x=door_center - self.door_size / 2,
+                               max_x=door_center + self.door_size / 2)
+
+        # create doors between rooms
+        if N_ROOMS == 9:
+            connect_horizontal(self.rooms[0], self.rooms[3])
+            connect_horizontal(self.rooms[3], self.rooms[6])
+            connect_horizontal(self.rooms[1], self.rooms[4])
+            connect_horizontal(self.rooms[4], self.rooms[7])
+            connect_horizontal(self.rooms[5], self.rooms[8])
+
+            connect_vertical(self.rooms[1], self.rooms[2])
+            connect_vertical(self.rooms[3], self.rooms[4])
+            connect_vertical(self.rooms[7], self.rooms[8])
+        else:
+            connect_horizontal(self.rooms[0], self.rooms[6])
+            connect_horizontal(self.rooms[1], self.rooms[7])
+            connect_horizontal(self.rooms[2], self.rooms[8])
+            connect_horizontal(self.rooms[3], self.rooms[9])
+            connect_horizontal(self.rooms[4], self.rooms[10])
+            connect_horizontal(self.rooms[5], self.rooms[11])
+
+            connect_horizontal(self.rooms[7], self.rooms[13])
+            connect_horizontal(self.rooms[8], self.rooms[14])
+            connect_horizontal(self.rooms[10], self.rooms[16])
+            connect_horizontal(self.rooms[11], self.rooms[17])
+
+            connect_horizontal(self.rooms[12], self.rooms[18])
+            connect_horizontal(self.rooms[13], self.rooms[19])
+            connect_horizontal(self.rooms[14], self.rooms[20])
+            connect_horizontal(self.rooms[15], self.rooms[21])
+
+            connect_horizontal(self.rooms[21], self.rooms[27])
+            connect_horizontal(self.rooms[22], self.rooms[28])
+            connect_horizontal(self.rooms[23], self.rooms[29])
+
+            connect_horizontal(self.rooms[24], self.rooms[30])
+            connect_horizontal(self.rooms[26], self.rooms[32])
+            connect_horizontal(self.rooms[27], self.rooms[33])
+            connect_horizontal(self.rooms[29], self.rooms[35])
+
+            connect_vertical(self.rooms[1], self.rooms[2])
+            connect_vertical(self.rooms[3], self.rooms[4])
+
+            connect_vertical(self.rooms[6], self.rooms[7])
+
+            connect_vertical(self.rooms[14], self.rooms[15])
+            connect_vertical(self.rooms[15], self.rooms[16])
+            connect_vertical(self.rooms[16], self.rooms[17])
+
+            connect_vertical(self.rooms[18], self.rooms[19])
+            connect_vertical(self.rooms[22], self.rooms[23])
+
+            connect_vertical(self.rooms[24], self.rooms[25])
+            connect_vertical(self.rooms[26], self.rooms[27])
+            connect_vertical(self.rooms[27], self.rooms[28])
+
+            connect_vertical(self.rooms[30], self.rooms[31])
+            connect_vertical(self.rooms[31], self.rooms[32])
+            connect_vertical(self.rooms[34], self.rooms[35])
+
+
