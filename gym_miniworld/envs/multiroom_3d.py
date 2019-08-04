@@ -1,15 +1,11 @@
 import numpy as np
-import math
 from gym import spaces
-from ..miniworld import MiniWorldEnv, Room
+from ..miniworld import MiniWorldEnv
 from ..entity import Box, MarkerFrame
 from ..params import DEFAULT_PARAMS
-from ..random import RandGen
 
 
 SCALE = 27      # scale from mujoco layout to miniworld environment
-HEADING_SMOOTHING_CONSTANT = 0.2 / 4
-# N_ROOMS = 36
 
 
 class Multiroom3d(MiniWorldEnv):
@@ -23,13 +19,12 @@ class Multiroom3d(MiniWorldEnv):
         params.set('forward_step', 2.0)
         params.set('turn_step', 45)
 
-        self.room_size = self.mj2mw(1/3)
-        self.door_size = self.mj2mw(1.5 * 0.0667)
-        self.wall_size = self.mj2mw(0.005)
+        self.layout_params = kwargs.pop('layout_params')
         self.rooms_per_side = kwargs.pop('rooms_per_side')
         self.doors = kwargs.pop('doors')
-        print("##### N_ROOMS_PER_SIDE: %f ########")
-        print(self.rooms_per_side)
+        self.heading_smoothing = kwargs.pop('heading_smoothing')
+        self.room_size = self.mj2mw(self.layout_params.room_size)
+        self.door_size = self.mj2mw(self.layout_params.door_size)
         super().__init__(**kwargs)
 
         # Allow only the movement actions
@@ -38,64 +33,6 @@ class Multiroom3d(MiniWorldEnv):
     def _gen_world(self, reset_state=None):
         self.add_rooms()
         self.add_doors()
-
-        # add markers to the rooms
-        self.markers = []
-        def add_marker(room, marker_num, side):
-            EPS = self.room_size * 0.02
-            if side == 'left':
-                pos1 = (room.min_x + EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z - self.room_size / 4)
-                pos2 = (room.min_x + EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z + self.room_size / 4)
-                dir = 0
-            elif side == 'right':
-                pos1 = (room.max_x - EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z - self.room_size / 4)
-                pos2 = (room.max_x - EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z + self.room_size / 4)
-                dir = np.pi
-            elif side == 'top':
-                pos1 = ((room.max_x - room.min_x) / 2 + room.min_x - self.room_size / 4, 1.5, room.min_z + EPS)
-                pos2 = ((room.max_x - room.min_x) / 2 + room.min_x + self.room_size / 4, 1.5, room.min_z + EPS)
-                dir = 3 * np.pi / 2
-            elif side == 'bottom':
-                pos1 = ((room.max_x - room.min_x) / 2 + room.min_x - self.room_size / 4, 1.5, room.max_z - EPS)
-                pos2 = ((room.max_x - room.min_x) / 2 + room.min_x + self.room_size / 4, 1.5, room.max_z - EPS)
-                dir = np.pi / 2
-            else:
-                raise ValueError("Marker placement '{}' not supported!".format(side))
-            self.markers.append(self.place_entity(MarkerFrame(pos=(0, 0, 0), dir=0,
-                                                              marker_num=marker_num, width=1.5),
-                                                  pos=pos1, dir=dir))
-            self.markers.append(self.place_entity(MarkerFrame(pos=(0, 0, 0), dir=0,
-                                                              marker_num=marker_num, width=1.5),
-                                                  pos=pos2, dir=dir))
-
-        # add_marker(self.rooms[0], 0, 'left')
-        # add_marker(self.rooms[0], 0, 'top')
-        # add_marker(self.rooms[0], 0, 'bottom')
-        #
-        # add_marker(self.rooms[1], 1, 'top')
-        # add_marker(self.rooms[1], 1, 'left')
-        #
-        # add_marker(self.rooms[2], 2, 'left')
-        # add_marker(self.rooms[2], 2, 'right')
-        # add_marker(self.rooms[2], 2, 'bottom')
-        #
-        # add_marker(self.rooms[3], 3, 'top')
-        #
-        # add_marker(self.rooms[4], 4, 'bottom')
-        #
-        # add_marker(self.rooms[5], 5, 'left')
-        # add_marker(self.rooms[5], 5, 'top')
-        # add_marker(self.rooms[5], 5, 'bottom')
-        #
-        # add_marker(self.rooms[6], 6, 'right')
-        # add_marker(self.rooms[6], 6, 'top')
-        # add_marker(self.rooms[6], 6, 'bottom')
-        #
-        # add_marker(self.rooms[7], 7, 'right')
-        # add_marker(self.rooms[7], 7, 'top')
-        #
-        # add_marker(self.rooms[8], 8, 'right')
-        # add_marker(self.rooms[8], 8, 'bottom')
 
         # add start and goal
         if reset_state is None:
@@ -120,14 +57,10 @@ class Multiroom3d(MiniWorldEnv):
             mod = lambda a, n: a - np.floor(a/n) * n
             return mod((a1 - a2 + 180), 360) - 180
 
-        target_heading = HEADING_SMOOTHING_CONSTANT * heading + (1 - HEADING_SMOOTHING_CONSTANT) * current_heading
         d_heading = get_angle_dist(heading, current_heading)
-
-        print("Current: {}, Heading: {}, Diff: {}".format(current_heading, heading, d_heading))
-
         self.turn_agent(-current_heading + heading)
         self.move_agent(distance, fwd_drift=0)
-        self.turn_agent(current_heading - heading + d_heading * HEADING_SMOOTHING_CONSTANT)
+        self.turn_agent(current_heading - heading + d_heading * self.heading_smoothing)
 
     def step(self, action):
         obs, reward, done, agent_pos = super().step(action)
@@ -179,110 +112,8 @@ class Multiroom3d(MiniWorldEnv):
         offset = self.rooms_per_side * self.room_size / 2
         for x in range(self.rooms_per_side):
             for y in range(self.rooms_per_side):
-                add_room(-(x * self.room_size + self.wall_size - offset), -((x+1) * self.room_size + self.wall_size - offset),
-                         -(y * self.room_size + self.wall_size - offset), -((y+1) * self.room_size + self.wall_size - offset))
-
-        #
-        # if N_ROOMS == 9:
-        #     add_room(-(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size),
-        #              -(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size))
-        #     add_room(-(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size),
-        #              -(0.5 * self.room_size), +(0.5 * self.room_size))
-        #     add_room(-(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size),
-        #              +(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size))
-        #
-        #     add_room(-(0.5 * self.room_size), +(0.5 * self.room_size),
-        #              -(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size))
-        #     add_room(-(0.5 * self.room_size), +(0.5 * self.room_size),
-        #              -(0.5 * self.room_size), +(0.5 * self.room_size))
-        #     add_room(-(0.5 * self.room_size), +(0.5 * self.room_size),
-        #              +(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size))
-        #
-        #     add_room(+(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size),
-        #              -(1.5 * self.room_size + self.wall_size), -(0.5 * self.room_size + self.wall_size))
-        #     add_room(+(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size),
-        #              -(0.5 * self.room_size), +(0.5 * self.room_size))
-        #     add_room(+(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size),
-        #              +(0.5 * self.room_size + self.wall_size), +(1.5 * self.room_size + self.wall_size))
-        #
-        # else:
-        #     add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
-        #              -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
-        #     add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
-        #              -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
-        #     add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
-        #              -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
-        #     add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
-        #              (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
-        #     add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
-        #              (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
-        #     add_room(-(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size),
-        #              (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
-        #
-        #     add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
-        #              -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
-        #     add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
-        #              -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
-        #     add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
-        #              -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
-        #     add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
-        #              (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
-        #     add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
-        #              (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
-        #     add_room(-(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size),
-        #              (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
-        #
-        #     add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
-        #              -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
-        #     add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
-        #              -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
-        #     add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
-        #              -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
-        #     add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
-        #              (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
-        #     add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
-        #              (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
-        #     add_room(-(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size),
-        #              (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
-        #
-        #     add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
-        #              -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
-        #     add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
-        #              -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
-        #     add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
-        #              -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
-        #     add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
-        #              (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
-        #     add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
-        #              (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
-        #     add_room((0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size),
-        #              (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
-        #
-        #     add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
-        #              -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
-        #     add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
-        #              -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
-        #     add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
-        #              -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
-        #     add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
-        #              (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
-        #     add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
-        #              (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
-        #     add_room((1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size),
-        #              (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
-        #
-        #     add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
-        #              -(3 * self.room_size + self.wall_size), -(2 * self.room_size + self.wall_size))
-        #     add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
-        #              -(2 * self.room_size + self.wall_size), -(1 * self.room_size + self.wall_size))
-        #     add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
-        #              -(1 * self.room_size + self.wall_size), -(0 * self.room_size + self.wall_size))
-        #     add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
-        #              (0 * self.room_size + self.wall_size), (1 * self.room_size + self.wall_size))
-        #     add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
-        #              (1 * self.room_size + self.wall_size), (2 * self.room_size + self.wall_size))
-        #     add_room((2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size),
-        #              (2 * self.room_size + self.wall_size), (3 * self.room_size + self.wall_size))
+                add_room(x * self.room_size - offset, (x+1) * self.room_size - offset,
+                         y * self.room_size - offset, (y+1) * self.room_size - offset)
 
     def add_doors(self):
         # prune some walls to connect rooms
@@ -305,62 +136,30 @@ class Multiroom3d(MiniWorldEnv):
             else:
                 connect_horizontal(self.rooms[door[0]], self.rooms[door[1]])
 
-
-        # if N_ROOMS == 9:
-        #     connect_horizontal(self.rooms[0], self.rooms[3])
-        #     connect_horizontal(self.rooms[3], self.rooms[6])
-        #     connect_horizontal(self.rooms[1], self.rooms[4])
-        #     connect_horizontal(self.rooms[4], self.rooms[7])
-        #     connect_horizontal(self.rooms[5], self.rooms[8])
-        #
-        #     connect_vertical(self.rooms[1], self.rooms[2])
-        #     connect_vertical(self.rooms[3], self.rooms[4])
-        #     connect_vertical(self.rooms[7], self.rooms[8])
-        # else:
-        #     connect_horizontal(self.rooms[0], self.rooms[6])
-        #     connect_horizontal(self.rooms[1], self.rooms[7])
-        #     connect_horizontal(self.rooms[2], self.rooms[8])
-        #     connect_horizontal(self.rooms[3], self.rooms[9])
-        #     connect_horizontal(self.rooms[4], self.rooms[10])
-        #     connect_horizontal(self.rooms[5], self.rooms[11])
-        #
-        #     connect_horizontal(self.rooms[7], self.rooms[13])
-        #     connect_horizontal(self.rooms[8], self.rooms[14])
-        #     connect_horizontal(self.rooms[10], self.rooms[16])
-        #     connect_horizontal(self.rooms[11], self.rooms[17])
-        #
-        #     connect_horizontal(self.rooms[12], self.rooms[18])
-        #     connect_horizontal(self.rooms[13], self.rooms[19])
-        #     connect_horizontal(self.rooms[14], self.rooms[20])
-        #     connect_horizontal(self.rooms[15], self.rooms[21])
-        #
-        #     connect_horizontal(self.rooms[21], self.rooms[27])
-        #     connect_horizontal(self.rooms[22], self.rooms[28])
-        #     connect_horizontal(self.rooms[23], self.rooms[29])
-        #
-        #     connect_horizontal(self.rooms[24], self.rooms[30])
-        #     connect_horizontal(self.rooms[26], self.rooms[32])
-        #     connect_horizontal(self.rooms[27], self.rooms[33])
-        #     connect_horizontal(self.rooms[29], self.rooms[35])
-        #
-        #     connect_vertical(self.rooms[1], self.rooms[2])
-        #     connect_vertical(self.rooms[3], self.rooms[4])
-        #
-        #     connect_vertical(self.rooms[6], self.rooms[7])
-        #
-        #     connect_vertical(self.rooms[14], self.rooms[15])
-        #     connect_vertical(self.rooms[15], self.rooms[16])
-        #     connect_vertical(self.rooms[16], self.rooms[17])
-        #
-        #     connect_vertical(self.rooms[18], self.rooms[19])
-        #     connect_vertical(self.rooms[22], self.rooms[23])
-        #
-        #     connect_vertical(self.rooms[24], self.rooms[25])
-        #     connect_vertical(self.rooms[26], self.rooms[27])
-        #     connect_vertical(self.rooms[27], self.rooms[28])
-        #
-        #     connect_vertical(self.rooms[30], self.rooms[31])
-        #     connect_vertical(self.rooms[31], self.rooms[32])
-        #     connect_vertical(self.rooms[34], self.rooms[35])
-
+    def add_marker(self, room, marker_num, side):
+        EPS = self.room_size * 0.02
+        if side == 'left':
+            pos1 = (room.min_x + EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z - self.room_size / 4)
+            pos2 = (room.min_x + EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z + self.room_size / 4)
+            dir = 0
+        elif side == 'right':
+            pos1 = (room.max_x - EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z - self.room_size / 4)
+            pos2 = (room.max_x - EPS, 1.5, (room.max_z - room.min_z) / 2 + room.min_z + self.room_size / 4)
+            dir = np.pi
+        elif side == 'top':
+            pos1 = ((room.max_x - room.min_x) / 2 + room.min_x - self.room_size / 4, 1.5, room.min_z + EPS)
+            pos2 = ((room.max_x - room.min_x) / 2 + room.min_x + self.room_size / 4, 1.5, room.min_z + EPS)
+            dir = 3 * np.pi / 2
+        elif side == 'bottom':
+            pos1 = ((room.max_x - room.min_x) / 2 + room.min_x - self.room_size / 4, 1.5, room.max_z - EPS)
+            pos2 = ((room.max_x - room.min_x) / 2 + room.min_x + self.room_size / 4, 1.5, room.max_z - EPS)
+            dir = np.pi / 2
+        else:
+            raise ValueError("Marker placement '{}' not supported!".format(side))
+        self.markers.append(self.place_entity(MarkerFrame(pos=(0, 0, 0), dir=0,
+                                                          marker_num=marker_num, width=1.5),
+                                              pos=pos1, dir=dir))
+        self.markers.append(self.place_entity(MarkerFrame(pos=(0, 0, 0), dir=0,
+                                                          marker_num=marker_num, width=1.5),
+                                              pos=pos2, dir=dir))
 

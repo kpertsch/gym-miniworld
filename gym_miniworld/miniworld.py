@@ -979,7 +979,7 @@ class MiniWorldEnv(gym.Env):
             ent1 = self.agent
 
         dist = np.linalg.norm(ent0.pos - ent1.pos)
-        return dist < ent0.radius + ent1.radius + 1.1 * self.max_forward_step
+        return dist < ent0.radius + ent1.radius + 1.5 * self.max_forward_step
 
     def _load_tex(self, tex_name):
         """
