@@ -240,7 +240,7 @@ class Room:
         """
 
         # Load the textures and do texture randomization
-        self.wall_tex = Texture.get(self.wall_tex_name, rng)
+        self.wall_tex = Texture.get(self.wall_tex_name, rng, no_idx=True)
         self.floor_tex = Texture.get(self.floor_tex_name, rng)
         self.ceil_tex = Texture.get(self.ceil_tex_name, rng)
 

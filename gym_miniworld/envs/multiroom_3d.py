@@ -25,6 +25,7 @@ class Multiroom3d(MiniWorldEnv):
         self.heading_smoothing = kwargs.pop('heading_smoothing')
         self.room_size = self.mj2mw(self.layout_params.room_size)
         self.door_size = self.mj2mw(self.layout_params.door_size)
+        self.textures = self.layout_params.textures
         super().__init__(**kwargs)
 
         # Allow only the movement actions
@@ -92,9 +93,6 @@ class Multiroom3d(MiniWorldEnv):
             raise ValueError("Scale function does not support inputs of shape {}".format(val.shape))
 
     def add_rooms(self):
-        textures = ["lg_style_01_wall_{}".format(s) for s in ['green_bright', 'blue', 'cerise', 'green', 'purple',
-                                                              'red', 'yellow']] + \
-                   ["lg_style_03_wall_{}".format(s) for s in ['cyan', 'orange']]
 
         def add_room(xmin, xmax, zmin, zmax):
             # adds rooms to member self.rooms automatically
@@ -103,7 +101,7 @@ class Multiroom3d(MiniWorldEnv):
                 max_x=xmax,
                 min_z=zmin,
                 max_z=zmax,
-                wall_tex=textures[len(self.rooms) % len(textures)],
+                wall_tex=self.textures[len(self.rooms) % len(self.textures)],
                 floor_tex='asphalt',
                 no_ceiling=True,
             )

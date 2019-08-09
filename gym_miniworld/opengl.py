@@ -31,7 +31,7 @@ class Texture:
     tex_cache = {}
 
     @classmethod
-    def get(self, tex_name, rng=None):
+    def get(self, tex_name, rng=None, no_idx=False):
         """
         Load a texture by name (or used a cached version)
         Also performs domain randomization if multiple versions are available.
@@ -40,22 +40,25 @@ class Texture:
         paths = self.tex_paths.get(tex_name, [])
 
         # Get an inventory of the existing texture files
-        if len(paths) == 0:
-            for i in range(1, 10):
-                path = get_file_path('textures', '%s_%d' % (tex_name, i), 'png')
-
-                if not os.path.exists(path):
-                    break
-                paths.append(path)
-
-        assert len(paths) > 0, 'failed to load textures for name "%s"' % tex_name
-
-        # If domain-randomization is to be used
-        if rng:
-            path_idx = rng.int(0, len(paths))
-            path = paths[path_idx]
+        if no_idx:
+            path = get_file_path('textures', tex_name, 'png')
         else:
-            path = paths[0]
+            if len(paths) == 0:
+                for i in range(1, 10):
+                    path = get_file_path('textures', '%s_%d' % (tex_name, i), 'png')
+
+                    if not os.path.exists(path):
+                        break
+                    paths.append(path)
+
+            assert len(paths) > 0, 'failed to load textures for name "%s"' % tex_name
+
+            # If domain-randomization is to be used
+            if rng:
+                path_idx = rng.int(0, len(paths))
+                path = paths[path_idx]
+            else:
+                path = paths[0]
 
         if path not in self.tex_cache:
             self.tex_cache[path] = Texture(Texture.load(path), tex_name)
