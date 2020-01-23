@@ -622,7 +622,7 @@ class MiniWorldEnv(gym.Env):
 
         # check for collisions with walls / other obstacles
         dist = np.linalg.norm(next_pos - self.agent.pos)
-        n_check_points = np.ceil(dist / 0.1)
+        n_check_points = int(max(1, np.ceil(dist / 0.1)))
         check_points = [self.agent.pos + i/n_check_points * (next_pos - self.agent.pos) for i in range(n_check_points)]
 
         if any([self.intersect(self.agent, next_p, self.agent.radius) for next_p in check_points]):
