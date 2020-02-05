@@ -622,10 +622,11 @@ class MiniWorldEnv(gym.Env):
 
         # check for collisions with walls / other obstacles
         dist = np.linalg.norm(next_pos - self.agent.pos)
-        n_check_points = int(max(1, np.ceil(dist / 0.1)))
+        n_check_points = int(max(10, np.ceil(dist / 0.1)))
         check_points = [self.agent.pos + i/n_check_points * (next_pos - self.agent.pos) for i in range(n_check_points)]
 
-        if any([self.intersect(self.agent, next_p, self.agent.radius) for next_p in check_points]):
+        # there is a known bug where the agent's current position can intersect with a wall, therefore skip first checkpoint
+        if len(check_points) > 1 and any([self.intersect(self.agent, next_p, self.agent.radius) for next_p in check_points[1:]]):
             return False
 
         carrying = self.agent.carrying
@@ -972,7 +973,7 @@ class MiniWorldEnv(gym.Env):
             if d < radius + ent2.radius:
                 return ent2
 
-        return None
+        return False
 
     def near(self, ent0, ent1=None):
         """
